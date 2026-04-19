@@ -2,9 +2,10 @@
   "name": "Lesson",
   "type": "object",
   "properties": {
-    "skater_id": {
-      "type": "string",
-      "description": "ID of the skater this lesson is for"
+    "skater_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs of the skaters in this lesson. Length 1 for private lessons, 2+ for semi-private / off-ice training."
     },
     "date": {
       "type": "string",
@@ -19,7 +20,7 @@
     },
     "duration_mins": {
       "type": "integer",
-      "description": "Duration in minutes (e.g., 20, 25, 30, 40, 50, 60)"
+      "description": "Duration in minutes (5-60 in 5-minute increments)"
     },
     "pricing_type": {
       "type": "string",
@@ -29,18 +30,18 @@
     },
     "rate": {
       "type": "number",
-      "description": "Dollar rate. Interpreted as $/hr if hourly, total $ if flat."
+      "description": "Hourly rate for the whole lesson. Per-skater cost is (duration/60 * rate) / number of skaters."
     },
     "notes": {
       "type": "string",
       "description": "Freeform notes about the lesson"
     },
-    "invoice_id": {
-      "type": "string",
-      "description": "ID of the Invoice this lesson is on (null until invoiced)"
+    "invoice_mapping": {
+      "type": "object",
+      "description": "Map of skater_id -> invoice_id. Populated per-skater when invoices are generated."
     }
   },
-  "required": ["skater_id", "date", "lesson_type", "duration_mins", "pricing_type", "rate"],
+  "required": ["skater_ids", "date", "lesson_type", "duration_mins", "pricing_type", "rate"],
   "rls": {
     "create": true,
     "read": { "created_by": "{{user.email}}" },

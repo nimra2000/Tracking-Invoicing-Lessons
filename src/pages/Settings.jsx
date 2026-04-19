@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Settings as SettingsIcon, Save } from "lucide-react";
+import DataBackup from "@/components/DataBackup";
 
 export default function Settings() {
   const [form, setForm] = useState({
@@ -159,6 +160,10 @@ export default function Settings() {
           </Button>
         </div>
       </form>
+
+      <div className="mt-6">
+        <DataBackup />
+      </div>
     </div>
   );
 }

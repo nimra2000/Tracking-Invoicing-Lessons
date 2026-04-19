@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, X, Trash2 } from "lucide-react";
+import { Plus, Search, X, Trash2, ChevronRight } from "lucide-react";
 import { money } from "@/lib/format";
 
 export default function Skaters() {
   const [skaters, setSkaters] = useState([]);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
@@ -57,60 +58,90 @@ export default function Skaters() {
             {skaters.length === 0 ? "No skaters yet" : "No matches"}
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {filtered.map((s) => (
-              <SkaterRow key={s.id} skater={s} onChange={refresh} />
-            ))}
-          </div>
+          <>
+            <div className="px-5 py-2 text-xs text-slate-500 bg-slate-50 border-b border-slate-100">
+              Click a skater to edit their profile.
+            </div>
+            <div className="divide-y divide-slate-100">
+              {filtered.map((s) => (
+                <SkaterRow key={s.id} skater={s} onEdit={() => setEditing(s)} onChange={refresh} />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      {showForm && (
-        <AddSkaterModal
+      {(showForm || editing) && (
+        <SkaterModal
+          skater={editing}
           defaultRate={profile?.default_hourly_rate || 50}
-          onClose={() => setShowForm(false)}
-          onCreated={refresh}
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
+          onSaved={refresh}
         />
       )}
     </div>
   );
 }
 
-function SkaterRow({ skater, onChange }) {
-  const handleDelete = async () => {
+function SkaterRow({ skater, onEdit, onChange }) {
+  const handleDelete = async (e) => {
+    e.stopPropagation();
     if (!confirm(`Delete ${skater.name}?`)) return;
     await base44.entities.Skater.delete(skater.id);
     onChange();
   };
   return (
-    <div className="px-5 py-4 flex items-center justify-between">
+    <div
+      onClick={onEdit}
+      role="button"
+      tabIndex={0}
+      className="group px-5 py-4 flex items-center justify-between hover:bg-sky-50/60 cursor-pointer transition-colors"
+    >
       <div>
-        <div className="font-medium text-slate-900">{skater.name}</div>
+        <div className="font-medium text-slate-900 group-hover:text-sky-900">{skater.name}</div>
         <div className="text-xs text-slate-500">
           {money(skater.default_hourly_rate)}/hr
           {skater.billing_name ? ` · Bill to: ${skater.billing_name}` : ""}
           {skater.billing_emails?.length ? ` · ${skater.billing_emails.join(", ")}` : ""}
         </div>
       </div>
-      <button
-        onClick={handleDelete}
-        className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleDelete}
+          className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition" />
+      </div>
     </div>
   );
 }
 
-function AddSkaterModal({ defaultRate, onClose, onCreated }) {
-  const [form, setForm] = useState({
-    name: "",
-    billing_name: "",
-    billing_email: "",
-    billing_emails: [],
-    default_hourly_rate: String(defaultRate),
-    notes: "",
-  });
+function SkaterModal({ skater, defaultRate, onClose, onSaved }) {
+  const isEdit = Boolean(skater);
+  const [form, setForm] = useState(
+    isEdit
+      ? {
+          name: skater.name || "",
+          billing_name: skater.billing_name || "",
+          billing_email: "",
+          billing_emails: skater.billing_emails || [],
+          default_hourly_rate: String(skater.default_hourly_rate ?? defaultRate),
+          notes: skater.notes || "",
+        }
+      : {
+          name: "",
+          billing_name: "",
+          billing_email: "",
+          billing_emails: [],
+          default_hourly_rate: String(defaultRate),
+          notes: "",
+        }
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -134,14 +165,16 @@ function AddSkaterModal({ defaultRate, onClose, onCreated }) {
     try {
       const emails = [...form.billing_emails];
       if (form.billing_email.trim()) emails.push(form.billing_email.trim());
-      await base44.entities.Skater.create({
+      const payload = {
         name: form.name.trim(),
         billing_name: form.billing_name.trim() || undefined,
         billing_emails: emails,
         default_hourly_rate: rate,
         notes: form.notes.trim() || undefined,
-      });
-      onCreated();
+      };
+      if (isEdit) await base44.entities.Skater.update(skater.id, payload);
+      else await base44.entities.Skater.create(payload);
+      onSaved();
       onClose();
     } catch (err) {
       setError(err.message || String(err));
@@ -150,11 +183,25 @@ function AddSkaterModal({ defaultRate, onClose, onCreated }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!isEdit) return;
+    if (!confirm(`Delete ${skater.name}?`)) return;
+    try {
+      await base44.entities.Skater.delete(skater.id);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.message || String(err));
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900">Add New Skater</h2>
+          <h2 className="text-xl font-bold text-slate-900">
+            {isEdit ? "Edit Skater" : "Add New Skater"}
+          </h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
@@ -223,13 +270,26 @@ function AddSkaterModal({ defaultRate, onClose, onCreated }) {
             />
           </Field>
           {error && <div className="text-sm text-red-600">{error}</div>}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving} className="bg-slate-900 hover:bg-slate-800">
-              {saving ? "Creating..." : "Create"}
-            </Button>
+          <div className="flex justify-between items-center pt-2">
+            {isEdit ? (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="text-sm text-red-600 hover:text-red-800 flex items-center gap-1"
+              >
+                <Trash2 className="w-4 h-4" /> Delete
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving} className="bg-slate-900 hover:bg-slate-800">
+                {saving ? (isEdit ? "Saving..." : "Creating...") : isEdit ? "Save" : "Create"}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

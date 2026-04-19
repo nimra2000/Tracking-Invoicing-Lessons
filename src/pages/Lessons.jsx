@@ -2,11 +2,26 @@ import { useEffect, useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, X, Trash2, ChevronLeft, ChevronRight, Calendar as CalIcon, List as ListIcon } from "lucide-react";
-import { lessonAmount, money, formatDate } from "@/lib/format";
+import {
+  Plus,
+  X,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Calendar as CalIcon,
+  List as ListIcon,
+} from "lucide-react";
+import {
+  money,
+  formatDate,
+  skaterIdsOf,
+  invoiceMappingOf,
+  lessonTotal,
+  perSkaterAmount,
+} from "@/lib/format";
 import { recalcInvoice } from "@/lib/invoiceRecalc";
 
-const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 5); // 5..60
+const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 5);
 const LESSON_TYPES = [
   "Private",
   "Semi Private",
@@ -15,6 +30,9 @@ const LESSON_TYPES = [
   "Off-Ice Training",
   "Expenses",
 ];
+
+// Which lesson types allow multiple skaters in the same lesson.
+const MULTI_SKATER_TYPES = new Set(["Semi Private", "Off-Ice Training"]);
 
 function isoKey(d) {
   return d.toISOString().slice(0, 10);
@@ -27,11 +45,17 @@ function startOfWeek(d) {
   return r;
 }
 
+function lessonSkaterNames(lesson, skaterMap) {
+  return skaterIdsOf(lesson)
+    .map((id) => skaterMap[id]?.name || "—")
+    .join(", ");
+}
+
 export default function Lessons() {
   const [lessons, setLessons] = useState([]);
   const [skaters, setSkaters] = useState([]);
-  const [mode, setMode] = useState("calendar"); // 'calendar' | 'list'
-  const [calView, setCalView] = useState("week"); // 'week' | 'day'
+  const [mode, setMode] = useState("calendar");
+  const [calView, setCalView] = useState("week");
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -51,8 +75,12 @@ export default function Lessons() {
 
   const skaterMap = useMemo(() => Object.fromEntries(skaters.map((s) => [s.id, s])), [skaters]);
 
-  const totalRevenue = lessons.reduce((s, l) => s + lessonAmount(l), 0);
-  const uninvoiced = lessons.filter((l) => !l.invoice_id).length;
+  const totalRevenue = lessons.reduce((s, l) => s + lessonTotal(l), 0);
+  const uninvoiced = lessons.filter((l) => {
+    const ids = skaterIdsOf(l);
+    const mapping = invoiceMappingOf(l);
+    return ids.some((sid) => !mapping[sid]);
+  }).length;
 
   const nav = (delta) => {
     const d = new Date(cursor);
@@ -60,9 +88,6 @@ export default function Lessons() {
     else d.setDate(d.getDate() + delta);
     setCursor(d);
   };
-
-  const handleSaved = () => refresh();
-  const handleDeleted = () => refresh();
 
   return (
     <div className="p-8 max-w-6xl">
@@ -137,7 +162,7 @@ export default function Lessons() {
           <DayView cursor={cursor} lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} />
         )
       ) : (
-        <ListView lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} onChange={handleDeleted} />
+        <ListView lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} onChange={refresh} />
       )}
 
       <div className="grid grid-cols-3 gap-4 mt-6">
@@ -154,7 +179,7 @@ export default function Lessons() {
             setShowForm(false);
             setEditing(null);
           }}
-          onSaved={handleSaved}
+          onSaved={refresh}
         />
       )}
     </div>
@@ -193,23 +218,24 @@ function DayCard({ date, lessons, skaterMap, isToday, onEdit, large }) {
           </div>
         ) : (
           <div className="space-y-2">
-            {lessons.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => onEdit(l)}
-                className="w-full text-left p-2 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-100 text-xs"
-              >
-                <div className="font-medium text-slate-900 truncate">
-                  {skaterMap[l.skater_id]?.name || "—"}
-                </div>
-                <div className="text-slate-500">
-                  {l.lesson_type} · {l.duration_mins} min
-                </div>
-                <div className="font-semibold text-slate-900 mt-0.5">
-                  {money(lessonAmount(l))}
-                </div>
-              </button>
-            ))}
+            {lessons.map((l) => {
+              const names = lessonSkaterNames(l, skaterMap);
+              return (
+                <button
+                  key={l.id}
+                  onClick={() => onEdit(l)}
+                  className="w-full text-left p-2 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-100 text-xs"
+                >
+                  <div className="font-medium text-slate-900 truncate">{names}</div>
+                  <div className="text-slate-500">
+                    {l.lesson_type} · {l.duration_mins} min
+                  </div>
+                  <div className="font-semibold text-slate-900 mt-0.5">
+                    {money(lessonTotal(l))}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -273,7 +299,7 @@ function ListView({ lessons, skaterMap, onEdit, onChange }) {
             <LessonRow
               key={l.id}
               lesson={l}
-              skater={skaterMap[l.skater_id]}
+              skaterMap={skaterMap}
               onEdit={() => onEdit(l)}
               onChange={onChange}
             />
@@ -284,26 +310,29 @@ function ListView({ lessons, skaterMap, onEdit, onChange }) {
   );
 }
 
-function LessonRow({ lesson, skater, onEdit, onChange }) {
+function LessonRow({ lesson, skaterMap, onEdit, onChange }) {
   const handleDelete = async (e) => {
     e.stopPropagation();
     if (!confirm("Delete this lesson?")) return;
-    const invoiceId = lesson.invoice_id;
+    const mapping = invoiceMappingOf(lesson);
+    const invoiceIds = [...new Set(Object.values(mapping).filter(Boolean))];
     await base44.entities.Lesson.delete(lesson.id);
-    if (invoiceId) await recalcInvoice(invoiceId);
+    for (const id of invoiceIds) await recalcInvoice(id);
     onChange();
   };
+  const names = lessonSkaterNames(lesson, skaterMap);
+  const invoiced = Object.keys(invoiceMappingOf(lesson)).length > 0;
   return (
     <div className="px-5 py-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer" onClick={onEdit}>
       <div>
-        <div className="font-medium text-slate-900">{skater?.name || "—"}</div>
+        <div className="font-medium text-slate-900">{names || "—"}</div>
         <div className="text-xs text-slate-500">
           {formatDate(lesson.date)} · {lesson.lesson_type} · {lesson.duration_mins} min
-          {lesson.invoice_id && <span className="ml-2 text-sky-600">· Invoiced</span>}
+          {invoiced && <span className="ml-2 text-sky-600">· Invoiced</span>}
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="font-semibold text-slate-900">{money(lessonAmount(lesson))}</div>
+        <div className="font-semibold text-slate-900">{money(lessonTotal(lesson))}</div>
         <button onClick={handleDelete} className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50">
           <Trash2 className="w-4 h-4" />
         </button>
@@ -313,12 +342,19 @@ function LessonRow({ lesson, skater, onEdit, onChange }) {
 }
 
 function LessonModal({ lesson, skaters, onClose, onSaved }) {
+  const initialSkaterIds = lesson ? skaterIdsOf(lesson) : [];
+  const [profileDefaultRate, setProfileDefaultRate] = useState(null);
   const [form, setForm] = useState(
     lesson
-      ? { ...lesson, rate: String(lesson.rate), duration_mins: String(lesson.duration_mins) }
+      ? {
+          ...lesson,
+          skater_ids: initialSkaterIds,
+          rate: String(lesson.rate),
+          duration_mins: String(lesson.duration_mins),
+        }
       : {
           lesson_type: "Private",
-          skater_id: "",
+          skater_ids: [],
           date: new Date().toISOString().slice(0, 10),
           duration_mins: "30",
           pricing_type: "hourly",
@@ -330,12 +366,46 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
   const [error, setError] = useState("");
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  const isMulti = MULTI_SKATER_TYPES.has(form.lesson_type);
+
+  // Load coach's default hourly rate once.
+  useEffect(() => {
+    base44.entities.Profile.list().then((list) => {
+      const rate = list[0]?.default_hourly_rate;
+      if (rate) setProfileDefaultRate(rate);
+    });
+  }, []);
+
+  // Prepopulate rate with coach's default when creating a new lesson.
   useEffect(() => {
     if (lesson) return;
-    if (!form.skater_id) return;
-    const sk = skaters.find((s) => s.id === form.skater_id);
-    if (sk && !form.rate) set("rate", String(sk.default_hourly_rate));
-  }, [form.skater_id]);
+    if (form.rate) return;
+    if (profileDefaultRate) set("rate", String(profileDefaultRate));
+  }, [profileDefaultRate]);
+
+  // When switching from multi to single, trim skater_ids to the first one.
+  useEffect(() => {
+    if (!isMulti && form.skater_ids.length > 1) {
+      set("skater_ids", form.skater_ids.slice(0, 1));
+    }
+  }, [form.lesson_type]);
+
+  // For single-skater lessons, prefer the skater's individual default rate
+  // when it's set (and the user hasn't manually typed a different rate).
+  useEffect(() => {
+    if (lesson) return;
+    if (isMulti) return;
+    if (form.skater_ids.length !== 1) return;
+    const sk = skaters.find((s) => s.id === form.skater_ids[0]);
+    if (!sk) return;
+    const skRate = Number(sk.default_hourly_rate);
+    if (!skRate) return;
+    const currentRate = Number(form.rate);
+    // Overwrite only if empty or currently equal to the coach's default.
+    if (!form.rate || currentRate === profileDefaultRate) {
+      set("rate", String(skRate));
+    }
+  }, [form.skater_ids, form.lesson_type]);
 
   const totalCost = useMemo(() => {
     const rate = Number(form.rate);
@@ -344,25 +414,30 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
     return form.pricing_type === "flat" ? rate : (dur / 60) * rate;
   }, [form.rate, form.duration_mins, form.pricing_type]);
 
+  const nSkaters = Math.max(1, form.skater_ids.length);
+  const perSkater = form.skater_ids.length > 0 ? totalCost / nSkaters : 0;
+
   const handleDelete = async () => {
     if (!lesson) return;
     if (!confirm("Delete this lesson?")) return;
-    const invoiceId = lesson.invoice_id;
+    const mapping = invoiceMappingOf(lesson);
+    const invoiceIds = [...new Set(Object.values(mapping).filter(Boolean))];
     await base44.entities.Lesson.delete(lesson.id);
-    if (invoiceId) await recalcInvoice(invoiceId);
+    for (const id of invoiceIds) await recalcInvoice(id);
     onSaved();
     onClose();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.skater_id) return setError("Select a skater");
+    if (form.skater_ids.length === 0)
+      return setError(isMulti ? "Add at least one skater to the group" : "Select a skater");
     if (!form.rate || Number(form.rate) <= 0) return setError("Enter a valid rate");
     setError("");
     setSaving(true);
     try {
       const payload = {
-        skater_id: form.skater_id,
+        skater_ids: form.skater_ids,
         date: form.date,
         lesson_type: form.lesson_type,
         duration_mins: Number(form.duration_mins),
@@ -370,14 +445,15 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
         rate: Number(form.rate),
         notes: form.notes?.trim() || undefined,
       };
-      let invoiceIdToRecalc = null;
+      let invoicesToRecalc = [];
       if (lesson) {
-        invoiceIdToRecalc = lesson.invoice_id || null;
+        const mapping = invoiceMappingOf(lesson);
+        invoicesToRecalc = [...new Set(Object.values(mapping).filter(Boolean))];
         await base44.entities.Lesson.update(lesson.id, payload);
       } else {
         await base44.entities.Lesson.create(payload);
       }
-      if (invoiceIdToRecalc) await recalcInvoice(invoiceIdToRecalc);
+      for (const id of invoicesToRecalc) await recalcInvoice(id);
       onSaved();
       onClose();
     } catch (err) {
@@ -386,6 +462,8 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
       setSaving(false);
     }
   };
+
+  const anyInvoiced = lesson && Object.keys(invoiceMappingOf(lesson)).length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -396,23 +474,35 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        {lesson?.invoice_id && (
+        {anyInvoiced && (
           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 text-xs">
-            This lesson is on an invoice. Changes will update the invoice total automatically.
+            This lesson is on an invoice. Changes will update those invoice totals automatically.
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Lesson Type *">
             <Select value={form.lesson_type} onChange={(v) => set("lesson_type", v)} options={LESSON_TYPES} />
           </Field>
-          <Field label="Skater *">
-            <Select
-              value={form.skater_id}
-              onChange={(v) => set("skater_id", v)}
-              options={skaters.map((s) => ({ value: s.id, label: s.name }))}
-              placeholder="Select skater"
-            />
-          </Field>
+
+          {isMulti ? (
+            <Field label="Skaters in Group *">
+              <SkaterMultiPicker
+                skaters={skaters}
+                value={form.skater_ids}
+                onChange={(ids) => set("skater_ids", ids)}
+              />
+            </Field>
+          ) : (
+            <Field label="Skater *">
+              <Select
+                value={form.skater_ids[0] || ""}
+                onChange={(v) => set("skater_ids", v ? [v] : [])}
+                options={skaters.map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="Select skater"
+              />
+            </Field>
+          )}
+
           <Field label="Date *">
             <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
           </Field>
@@ -437,13 +527,20 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
               ))}
             </div>
           </Field>
-          <Field label={`Rate ($) * ${form.pricing_type === "hourly" ? "(per hour)" : "(flat)"}`}>
+          <Field
+            label={form.pricing_type === "hourly" ? "Hourly Rate ($) *" : "Flat Rate ($) *"}
+          >
             <Input
               type="number"
               step="0.01"
               value={form.rate}
               onChange={(e) => set("rate", e.target.value)}
             />
+            <div className="text-xs text-slate-500 mt-1">
+              {form.pricing_type === "hourly"
+                ? "Hourly rate for the whole lesson. When a lesson has multiple skaters, the cost is split among them."
+                : "Flat cost for the whole lesson. When a lesson has multiple skaters, the cost is split among them."}
+            </div>
           </Field>
           <Field label="Notes">
             <textarea
@@ -453,10 +550,31 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm"
             />
           </Field>
+
           <div className="bg-slate-50 rounded-xl p-4">
-            <div className="text-xs text-slate-500">Total Cost</div>
-            <div className="text-2xl font-bold text-slate-900">{money(totalCost)}</div>
+            {form.skater_ids.length === 0 ? (
+              <>
+                <div className="text-xs text-slate-500">
+                  {isMulti ? "Add skaters to calculate cost" : "Select a skater to calculate cost"}
+                </div>
+                <div className="text-2xl font-bold text-slate-900">$-</div>
+              </>
+            ) : form.skater_ids.length === 1 ? (
+              <>
+                <div className="text-xs text-slate-500">Lesson cost</div>
+                <div className="text-2xl font-bold text-slate-900">{money(totalCost)}</div>
+              </>
+            ) : (
+              <>
+                <div className="text-xs text-slate-500">Cost per skater</div>
+                <div className="text-2xl font-bold text-slate-900">{money(perSkater)}</div>
+                <div className="text-xs text-slate-500 mt-2">
+                  {form.skater_ids.length} skaters · lesson total {money(totalCost)}
+                </div>
+              </>
+            )}
           </div>
+
           {error && <div className="text-sm text-red-600">{error}</div>}
           <div className="flex justify-between items-center pt-1">
             {lesson ? (
@@ -509,5 +627,64 @@ function Select({ value, onChange, options, placeholder }) {
         </option>
       ))}
     </select>
+  );
+}
+
+function SkaterMultiPicker({ skaters, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const selectedIds = new Set(value);
+  const unselected = skaters
+    .filter((s) => !selectedIds.has(s.id))
+    .filter((s) => s.name.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const add = (id) => {
+    onChange([...value, id]);
+    setQuery("");
+  };
+  const remove = (id) => onChange(value.filter((v) => v !== id));
+
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((id) => {
+            const sk = skaters.find((s) => s.id === id);
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 bg-slate-900 text-white rounded-full px-3 py-1 text-xs"
+              >
+                {sk?.name || "—"}
+                <button type="button" onClick={() => remove(id)}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <div className="relative">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={value.length === 0 ? "Add skater to group" : "Add another skater"}
+        />
+        {query && unselected.length > 0 && (
+          <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+            {unselected.slice(0, 12).map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => add(s.id)}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm"
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

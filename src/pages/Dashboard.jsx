@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Calendar, Users, FileText, TrendingUp, DollarSign, X } from "lucide-react";
-import { lessonAmount, money, formatDate } from "@/lib/format";
+import {
+  money,
+  formatDate,
+  lessonTotal,
+  perSkaterAmount,
+  skaterIdsOf,
+} from "@/lib/format";
 
 export default function Dashboard() {
   const [skaters, setSkaters] = useState([]);
@@ -25,7 +31,7 @@ export default function Dashboard() {
 
   const thisMonth = new Date().toISOString().slice(0, 7);
   const thisMonthLessons = lessons.filter((l) => l.date?.startsWith(thisMonth));
-  const monthlyRevenue = thisMonthLessons.reduce((s, l) => s + lessonAmount(l), 0);
+  const monthlyRevenue = thisMonthLessons.reduce((s, l) => s + lessonTotal(l), 0);
   const pending = invoices.filter((i) => i.status === "pending");
   const skaterMap = Object.fromEntries(skaters.map((s) => [s.id, s]));
 
@@ -92,17 +98,20 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {recent.map((l) => (
-              <div key={l.id} className="py-3 flex items-center justify-between text-sm">
-                <div>
-                  <div className="font-medium text-slate-900">{skaterMap[l.skater_id]?.name || "—"}</div>
-                  <div className="text-slate-500 text-xs">
-                    {formatDate(l.date)} · {l.lesson_type} · {l.duration_mins} min
+            {recent.map((l) => {
+              const names = skaterIdsOf(l).map((id) => skaterMap[id]?.name || "—").join(", ");
+              return (
+                <div key={l.id} className="py-3 flex items-center justify-between text-sm">
+                  <div>
+                    <div className="font-medium text-slate-900">{names || "—"}</div>
+                    <div className="text-slate-500 text-xs">
+                      {formatDate(l.date)} · {l.lesson_type} · {l.duration_mins} min
+                    </div>
                   </div>
+                  <div className="font-semibold text-slate-900">{money(lessonTotal(l))}</div>
                 </div>
-                <div className="font-semibold text-slate-900">{money(lessonAmount(l))}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -147,18 +156,23 @@ function StatCard({ label, value, subtitle, icon: Icon, color, onClick }) {
 }
 
 function RevenueBreakdownModal({ monthLabel, lessons, skaterMap, onClose }) {
+  // Allocate each lesson's cost across its skaters.
   const bySkater = {};
   for (const l of lessons) {
-    const sid = l.skater_id || "unknown";
-    (bySkater[sid] ||= { lessons: [], amount: 0 });
-    bySkater[sid].lessons.push(l);
-    bySkater[sid].amount += lessonAmount(l);
+    const ids = skaterIdsOf(l);
+    const share = perSkaterAmount(l);
+    const list = ids.length ? ids : ["unknown"];
+    for (const sid of list) {
+      (bySkater[sid] ||= { lessons: 0, amount: 0 });
+      bySkater[sid].lessons += 1;
+      bySkater[sid].amount += share;
+    }
   }
   const rows = Object.entries(bySkater)
     .map(([sid, info]) => ({
       sid,
       name: skaterMap[sid]?.name || "Unknown skater",
-      lessons: info.lessons.length,
+      lessons: info.lessons,
       amount: info.amount,
     }))
     .sort((a, b) => b.amount - a.amount);

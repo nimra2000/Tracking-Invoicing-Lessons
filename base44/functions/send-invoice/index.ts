@@ -28,9 +28,22 @@ function deriveMonthLabel(yyyyMm: string | undefined): string {
   return new Date(y, m - 1).toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
-function lessonAmount(l: { duration_mins: number; pricing_type: string; rate: number }): number {
+function lessonTotal(l: { duration_mins: number; pricing_type: string; rate: number }): number {
   if (l.pricing_type === "flat") return Number(l.rate);
   return (l.duration_mins / 60) * Number(l.rate);
+}
+
+function skaterIdsOf(l: any): string[] {
+  return Array.isArray(l.skater_ids) ? l.skater_ids : [];
+}
+
+function invoiceMappingOf(l: any): Record<string, string> {
+  return l.invoice_mapping && typeof l.invoice_mapping === "object" ? l.invoice_mapping : {};
+}
+
+function perSkaterAmount(l: any): number {
+  const n = Math.max(1, skaterIdsOf(l).length);
+  return lessonTotal(l) / n;
 }
 
 async function buildInvoicePDF(
@@ -110,11 +123,17 @@ async function buildInvoicePDF(
   y -= 16;
 
   for (const l of lessons) {
-    const amt = lessonAmount(l);
-    const rateStr = l.pricing_type === "hourly" ? `$${Number(l.rate).toFixed(0)}/hr` : `$${Number(l.rate).toFixed(2)} flat`;
+    const amt = perSkaterAmount(l);
+    const n = Math.max(1, skaterIdsOf(l).length);
+    const perSkaterRate = Number(l.rate || 0) / n;
+    const rateStr =
+      l.pricing_type === "hourly"
+        ? `$${perSkaterRate.toFixed(2)}/hr`
+        : `$${perSkaterRate.toFixed(2)} flat`;
     const durationStr = `${l.duration_mins} min`;
+    const typeStr = l.lesson_type || "Private";
     page.drawText(formatDate(l.date), { x: LEFT, y, size: 9, font: regular, color: black });
-    page.drawText(l.lesson_type || "Private", { x: LEFT + 95, y, size: 9, font: regular, color: black });
+    page.drawText(typeStr, { x: LEFT + 95, y, size: 9, font: regular, color: black });
     page.drawText(durationStr, { x: LEFT + 215, y, size: 9, font: regular, color: black });
     page.drawText(rateStr, { x: LEFT + 320, y, size: 9, font: regular, color: black });
     const amtStr = `$${amt.toFixed(2)}`;
@@ -211,7 +230,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { invoice_id } = await req.json();
+    const { invoice_id, preview = false } = await req.json();
     if (!invoice_id) return Response.json({ error: "invoice_id required" }, { status: 400 });
 
     const invoice = await base44.entities.Invoice.get(invoice_id);
@@ -221,21 +240,26 @@ Deno.serve(async (req) => {
     const skater = await base44.entities.Skater.get(invoice.skater_id);
     if (!skater) return Response.json({ error: "Skater not found" }, { status: 404 });
 
+    const skaterId = invoice.skater_id;
     const lessons = (await base44.entities.Lesson.list()).filter(
-      (l: any) => l.invoice_id === invoice_id
+      (l: any) => invoiceMappingOf(l)[skaterId] === invoice_id
     );
     lessons.sort((a: any, b: any) => a.date.localeCompare(b.date));
 
     // Always recompute totals from current lessons so edits are reflected.
-    const recomputedSubtotal = lessons.reduce((s: number, l: any) => s + lessonAmount(l), 0);
+    // Amounts are per-skater: total lesson cost / number of skaters.
+    const recomputedSubtotal = lessons.reduce((s: number, l: any) => s + perSkaterAmount(l), 0);
     const recomputedTaxAmount = recomputedSubtotal * (Number(invoice.tax_rate || 0) / 100);
     const recomputedTotal = recomputedSubtotal + recomputedTaxAmount;
-    const driftedSubtotal = Math.abs(recomputedSubtotal - Number(invoice.subtotal || 0)) > 0.001;
+    const driftedSubtotal =
+      Math.abs(recomputedSubtotal - Number(invoice.subtotal || 0)) > 0.001 ||
+      Math.abs(recomputedTotal - Number(invoice.total || 0)) > 0.001;
     if (driftedSubtotal) {
       await base44.entities.Invoice.update(invoice_id, {
         subtotal: recomputedSubtotal,
         tax_amount: recomputedTaxAmount,
         total: recomputedTotal,
+        recalculated_at: new Date().toISOString(),
       });
     }
     invoice.subtotal = recomputedSubtotal;
@@ -245,9 +269,22 @@ Deno.serve(async (req) => {
     const profiles = await base44.entities.Profile.list();
     const profile = profiles[0] || { coach_email: user.email };
 
-    const { accessToken } = await base44.asServiceRole.connectors.getConnection("gmail");
-
+    // We're passing `lessons` already scoped to this invoice (one per-skater slot),
+    // so the PDF renderer uses perSkaterAmount for each row.
     const pdfBytes = await buildInvoicePDF(profile, skater, invoice, lessons);
+
+    // Preview mode: return the PDF as base64 without sending the email.
+    if (preview) {
+      return Response.json({
+        success: true,
+        preview: true,
+        pdf_base64: base64Encode(pdfBytes),
+        pdf_size: pdfBytes.length,
+        line_items: lessons.length,
+      });
+    }
+
+    const { accessToken } = await base44.asServiceRole.connectors.getConnection("gmail");
 
     const recipients = (skater.billing_emails && skater.billing_emails.length
       ? skater.billing_emails

@@ -3,7 +3,7 @@
 // Full-stack template with backend and client configuration.
 
 {
-  "name": "base44-invoicing-test",
+  "name": "lesson-tracking",
 
   // Site/hosting configuration for the client application
   // Docs: https://docs.base44.com/configuration/hosting

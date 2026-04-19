@@ -46,6 +46,11 @@
       "type": "string",
       "format": "date-time",
       "description": "When the invoice was emailed (null until sent)"
+    },
+    "recalculated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set whenever subtotal/total change after first creation. Compared against sent_at to detect drift since last send."
     }
   },
   "required": ["skater_id", "month", "invoice_date", "total"],

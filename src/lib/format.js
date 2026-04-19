@@ -1,6 +1,21 @@
-export function lessonAmount(lesson) {
-  if (lesson.pricing_type === "flat") return Number(lesson.rate);
-  return (Number(lesson.duration_mins) / 60) * Number(lesson.rate);
+export function skaterIdsOf(lesson) {
+  return Array.isArray(lesson.skater_ids) ? lesson.skater_ids : [];
+}
+
+export function invoiceMappingOf(lesson) {
+  return lesson.invoice_mapping && typeof lesson.invoice_mapping === "object"
+    ? lesson.invoice_mapping
+    : {};
+}
+
+export function lessonTotal(lesson) {
+  if (lesson.pricing_type === "flat") return Number(lesson.rate || 0);
+  return (Number(lesson.duration_mins || 0) / 60) * Number(lesson.rate || 0);
+}
+
+export function perSkaterAmount(lesson) {
+  const n = Math.max(1, skaterIdsOf(lesson).length);
+  return lessonTotal(lesson) / n;
 }
 
 export function money(n) {

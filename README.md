@@ -1,4 +1,4 @@
-# IceSheet Invoices
+# Lesson Tracking
 
 A skating-coach invoicing app — manage skaters, log lessons, generate PDF invoices, and email them via Gmail. Built on [Base44](https://base44.com) (backend + hosting) and React + Vite (frontend).
 
@@ -68,7 +68,7 @@ base44 site deploy -y         # Publish the built frontend
 base44 deploy
 ```
 
-Live URL: https://base44-invoicing-test-6b56c686.base44.app
+Live URL: https://lesson-tracking.base44.app
 
 ## Useful CLI commands
 
