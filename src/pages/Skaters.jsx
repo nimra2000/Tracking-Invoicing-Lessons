@@ -28,15 +28,15 @@ export default function Skaters() {
   );
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 md:p-8 max-w-5xl">
+      <div className="flex items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Skaters</h1>
           <p className="text-slate-500 mt-1">Manage your skating students</p>
         </div>
         <Button
           onClick={() => setShowForm(true)}
-          className="bg-slate-900 hover:bg-slate-800 rounded-xl h-11 px-5"
+          className="bg-slate-900 hover:bg-slate-800 rounded-xl h-11 px-4 shrink-0"
         >
           <Plus className="w-4 h-4 mr-2" /> Add Skater
         </Button>
@@ -196,8 +196,8 @@ function SkaterModal({ skater, defaultRate, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900">
             {isEdit ? "Edit Skater" : "Add New Skater"}

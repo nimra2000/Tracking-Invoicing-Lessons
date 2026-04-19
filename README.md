@@ -1,13 +1,25 @@
 # Lesson Tracking
 
-A skating-coach invoicing app — manage skaters, log lessons, generate PDF invoices, and email them via Gmail. Built on [Base44](https://base44.com) (backend + hosting) and React + Vite (frontend).
+A skating-coach invoicing app — manage skaters, log lessons, generate PDF invoices, and email them via the coach's own Gmail account. Built on [Base44](https://base44.com) (backend + hosting) and React + Vite (frontend).
 
-## Structure
+**Live URL:** https://lesson-tracking.base44.app
+
+## Features
+
+- **Skaters** — add, search, edit profiles (name, optional billing name, multiple billing emails, default hourly rate, notes).
+- **Lessons** — log sessions on a color-coded week/day calendar. Types: Private, Semi Private, Competition, Choreography, Off-Ice Training, Expenses. Supports multiple skaters per lesson (semi-private, off-ice) with per-skater cost splitting. Hourly or flat pricing.
+- **Invoices** — generate per-skater invoices from uninvoiced lessons for a single month, a multi-month range, or a custom date range (e.g. weekly billing). Supports tax rate, Mark Paid/Pending, Preview PDF, and Send via Gmail.
+- **PDF invoice** — coach header, bill-to, itemized lessons with per-skater rate + amount, subtotal, optional tax, total, and payment instructions.
+- **Auto-recalc + drift alert** — if a lesson on a sent invoice is later edited, the invoice totals recompute automatically and a banner appears on the Invoices page flagging that the recipient's copy is out of date.
+- **Data backup** — download Skaters and Lessons as CSV files; import CSVs back to rebuild data.
+- **Mobile / iOS / iPad** — responsive layout with hamburger drawer on phones, safe-area-aware padding, bottom-sheet-style modals, horizontally-scrollable week calendar.
+
+## Project structure
 
 ```
 base44/                    # Backend, managed by the Base44 CLI
 ├── config.jsonc           # Project settings
-├── auth/                  # Auth config (Google login, etc.)
+├── auth/                  # Auth config (Google login)
 ├── entities/              # Data schemas (JSON Schema)
 │   ├── skater.jsonc
 │   ├── lesson.jsonc
@@ -18,8 +30,8 @@ base44/                    # Backend, managed by the Base44 CLI
 └── functions/             # Serverless functions (Deno)
     └── send-invoice/      # Generates PDF + sends via Gmail API
 
-src/                       # Frontend
-├── App.jsx                # Auth gate, sidebar, routing
+src/                       # Frontend (React + Vite)
+├── App.jsx                # Auth gate, sidebar/drawer, routing
 ├── main.jsx               # Entry point
 ├── api/base44Client.js    # SDK client
 ├── pages/                 # Route pages
@@ -28,47 +40,33 @@ src/                       # Frontend
 │   ├── Lessons.jsx
 │   ├── Invoices.jsx
 │   └── Settings.jsx
-├── components/ui/         # Buttons, inputs, etc.
-└── lib/                   # Shared utilities (format helpers, invoice recalc)
+├── components/
+│   ├── ui/                # Buttons, inputs, checkbox
+│   └── DataBackup.jsx     # CSV export/import card
+└── lib/                   # Format helpers, CSV parser, invoice recalc
 ```
 
-## Local development
+## Deployment
 
-Two terminals, both long-running. Backend changes go to a local in-memory sandbox — production data is NOT touched.
-
-**Terminal 1 — backend dev server:**
+Iteration is deploy-based — there's no working local dev loop, so every change ships to the live URL. The `base44 dev` command is available but the cross-origin session flow between Vite (`:5173`) and the Base44 dev server (`:4400`) did not authenticate cleanly in our setup, so we stayed on the deploy-to-test cycle.
 
 ```bash
-base44 dev
-```
+# One-time setup per machine
+npm install -g base44@latest
+base44 login
 
-This runs functions as local Deno processes (auto-reload on save) and keeps entities in an in-memory DB. Auth and the Gmail connector are forwarded to your deployed Base44 app so login and email sending still work. Data is wiped every time you stop the server — re-seed test skaters/lessons each session.
+# From this project folder:
+npm install                        # first time only
 
-**Terminal 2 — frontend dev server:**
-
-```bash
-npm install        # first time only
-npm run dev
-```
-
-Vite serves the frontend at `http://localhost:5173` with hot module reload. It talks to the local Base44 dev server above, so UI edits appear instantly.
-
-## Deploying to production
-
-**Only run these when you're ready to ship changes to real users.**
-
-```bash
-base44 entities push          # Push entity schema changes
-base44 connectors push        # Push connector changes (may need OAuth approval)
-base44 functions deploy       # Deploy backend functions
-npm run build                 # Build the frontend
-base44 site deploy -y         # Publish the built frontend
+# Ship a change
+base44 entities push               # if entity schemas changed
+base44 connectors push             # if connectors changed (may open browser for OAuth)
+base44 functions deploy            # if backend functions changed
+npm run build && base44 site deploy -y    # if frontend changed
 
 # Or all at once:
-base44 deploy
+base44 deploy --yes
 ```
-
-Live URL: https://lesson-tracking.base44.app
 
 ## Useful CLI commands
 
@@ -78,13 +76,18 @@ Live URL: https://lesson-tracking.base44.app
 | `base44 dashboard open` | Open the app's Base44 dashboard in the browser |
 | `base44 logs` | Tail recent function logs |
 | `base44 exec` | Pipe a `.ts` script via stdin to run server-side with the SDK pre-authenticated |
-| `base44 entities pull` | Pull current entity schemas from Base44 to local |
 | `base44 connectors list-available` | See all available OAuth integrations |
 | `base44 secrets set KEY=value` | Set an environment variable for functions |
 
 ## Architecture notes
 
-- **RLS (row-level security):** every entity has rules scoped by `created_by: {{user.email}}` so each coach only sees their own data.
-- **Invoice totals** live on the Invoice record (`subtotal`, `tax_amount`, `total`) but are recomputed from the linked Lessons whenever a lesson is edited, and also re-checked inside the `send-invoice` function before the PDF is rendered — so the sent PDF is always current.
-- **PDF generation** uses [`pdf-lib`](https://pdf-lib.js.org/) inside the `send-invoice` Deno function; bytes are built in memory, wrapped in a multipart MIME message, base64url-encoded, and POSTed to the Gmail API using the OAuth token from the `gmail` connector.
-- **Auth:** handled by Base44 (Google OAuth). The frontend gates routes behind `base44.auth.me()`.
+- **Auth:** Google OAuth handled by Base44. The frontend gates routes behind `base44.auth.me()`; RLS on every entity (`created_by: {{user.email}}`) scopes data per coach.
+- **PDF generation:** `pdf-lib` in the `send-invoice` Deno function builds the PDF in memory — no file on disk — with coach header, bill-to, an itemized line-items table, subtotal/tax/total, and payment instructions.
+- **Email sending:** the function fetches a Gmail OAuth access token via `base44.asServiceRole.connectors.getConnection("gmail")`, wraps the PDF bytes in a multipart MIME message with the coach's email as the `From`, base64url-encodes it, and POSTs it to `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`. The email goes out from the coach's actual Gmail account — recipients see it identically to a hand-typed email.
+- **Multi-skater lessons:** a lesson stores `skater_ids` (array) and `invoice_mapping` (`{ skater_id: invoice_id }`). The per-skater cost is `(duration × hourly_rate) / n_skaters` for hourly, or `flat_rate / n_skaters` for flat.
+- **Invoice totals** are stored on the record for display speed but recomputed from the current lesson records on every edit AND again server-side just before a PDF is rendered — so sent/preview PDFs are always current.
+- **Drift alert:** `Invoice.recalculated_at` is stamped when totals actually change. If it's later than `Invoice.sent_at`, the UI flags the invoice as out of date and prompts a resend.
+
+## Cost
+
+Running on Base44's free tier. The only platform-specific thing we pay attention to is that creating/sharing a Base44 custom domain, enabling GitHub 2-way sync, or hiding the "Edit with Base44" badge all require a paid plan — but none are needed to run the app end-to-end.

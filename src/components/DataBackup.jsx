@@ -24,7 +24,25 @@ export default function DataBackup() {
   const setOk = (message) => setStatus({ type: "ok", message });
   const setErr = (message) => setStatus({ type: "error", message });
 
-  const handleExport = async () => {
+  const exportSkaters = async () => {
+    setStatus(null);
+    try {
+      const skaters = await base44.entities.Skater.list();
+      const rows = skaters.map((s) => ({
+        name: s.name || "",
+        billing_name: s.billing_name || "",
+        billing_emails: (s.billing_emails || []).join(";"),
+        default_hourly_rate: s.default_hourly_rate ?? "",
+        notes: s.notes || "",
+      }));
+      downloadCSV("skaters.csv", stringifyCSV(SKATER_HEADERS, rows));
+      setOk(`Exported ${skaters.length} skater${skaters.length === 1 ? "" : "s"} to skaters.csv.`);
+    } catch (err) {
+      setErr(err.message || String(err));
+    }
+  };
+
+  const exportLessons = async () => {
     setStatus(null);
     try {
       const [skaters, lessons] = await Promise.all([
@@ -32,14 +50,7 @@ export default function DataBackup() {
         base44.entities.Lesson.list(),
       ]);
       const skMap = Object.fromEntries(skaters.map((s) => [s.id, s.name]));
-      const skaterRows = skaters.map((s) => ({
-        name: s.name || "",
-        billing_name: s.billing_name || "",
-        billing_emails: (s.billing_emails || []).join(";"),
-        default_hourly_rate: s.default_hourly_rate ?? "",
-        notes: s.notes || "",
-      }));
-      const lessonRows = lessons.map((l) => ({
+      const rows = lessons.map((l) => ({
         date: l.date || "",
         skater_names: skaterIdsOf(l)
           .map((id) => skMap[id] || "")
@@ -50,9 +61,8 @@ export default function DataBackup() {
         rate: l.rate ?? "",
         notes: l.notes || "",
       }));
-      downloadCSV("skaters.csv", stringifyCSV(SKATER_HEADERS, skaterRows));
-      downloadCSV("lessons.csv", stringifyCSV(LESSON_HEADERS, lessonRows));
-      setOk(`Exported ${skaters.length} skaters and ${lessons.length} lessons.`);
+      downloadCSV("lessons.csv", stringifyCSV(LESSON_HEADERS, rows));
+      setOk(`Exported ${lessons.length} lesson${lessons.length === 1 ? "" : "s"} to lessons.csv.`);
     } catch (err) {
       setErr(err.message || String(err));
     }
@@ -187,16 +197,26 @@ export default function DataBackup() {
       <div className="mb-5">
         <h3 className="font-medium text-slate-900 mb-1">Export data</h3>
         <p className="text-xs text-slate-500 mb-3">
-          Downloads two CSV files — one for skaters and one for lessons.
+          Download each CSV separately so mobile browsers handle both files reliably.
         </p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleExport}
-          className="border-slate-200"
-        >
-          <Download className="w-4 h-4 mr-2" /> Download CSV files
-        </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={exportSkaters}
+            className="border-slate-200"
+          >
+            <Download className="w-4 h-4 mr-2" /> Download skaters.csv
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={exportLessons}
+            className="border-slate-200"
+          >
+            <Download className="w-4 h-4 mr-2" /> Download lessons.csv
+          </Button>
+        </div>
       </div>
 
       <div className="border-t border-slate-100 pt-5">

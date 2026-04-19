@@ -54,16 +54,16 @@ export default function Invoices() {
   const driftedInvoices = invoices.filter(hasDrift);
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 md:p-8 max-w-6xl">
+      <div className="flex items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Invoices</h1>
         </div>
         <Button
           onClick={() => setShowGen(true)}
-          className="bg-slate-900 hover:bg-slate-800 rounded-xl h-11 px-5"
+          className="bg-slate-900 hover:bg-slate-800 rounded-xl h-11 px-4 shrink-0"
         >
-          <Plus className="w-4 h-4 mr-2" /> Generate Invoices
+          <Plus className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Generate Invoices</span><span className="sm:hidden">Generate</span>
         </Button>
       </div>
 
@@ -143,9 +143,11 @@ export default function Invoices() {
 
 function StatTile({ label, value, color = "text-slate-900" }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-5 min-w-0">
+      <div className="text-xs md:text-sm text-slate-500 truncate">{label}</div>
+      <div className={`text-lg md:text-2xl font-bold mt-1 truncate tabular-nums ${color}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -333,8 +335,8 @@ function GenerateModal({ lessons, skaters, onClose, onDone }) {
   const skatersWithLessons = Object.keys(bySkater);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900">Generate Invoices</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -507,8 +509,8 @@ function InvoiceDetail({ invoice, skater, lessons, onClose, onChange }) {
   const recipients = skater?.billing_emails?.length ? skater.billing_emails : [];
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900">Invoice Detail</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -537,36 +539,40 @@ function InvoiceDetail({ invoice, skater, lessons, onClose, onChange }) {
           </div>
         </div>
 
-        <table className="w-full text-sm mb-4">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
-              <th className="py-2">Date</th>
-              <th className="py-2">Type</th>
-              <th className="py-2 text-right">Duration</th>
-              <th className="py-2 text-right">Rate</th>
-              <th className="py-2 text-right">Amount</th>
-            </tr>
-          </thead>
+        <div className="-mx-5 sm:mx-0 overflow-x-auto">
+          <table className="w-full text-sm mb-4 min-w-[500px]">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
+                <th className="py-2 pl-5 sm:pl-0">Date</th>
+                <th className="py-2">Type</th>
+                <th className="py-2 text-right">Duration</th>
+                <th className="py-2 text-right">Rate</th>
+                <th className="py-2 text-right pr-5 sm:pr-0">Amount</th>
+              </tr>
+            </thead>
           <tbody className="divide-y divide-slate-100">
             {lessons.map((l) => {
               const n = Math.max(1, skaterIdsOf(l).length);
               const perSkaterRate = Number(l.rate || 0) / n;
               return (
                 <tr key={l.id}>
-                  <td className="py-2">{formatDate(l.date)}</td>
+                  <td className="py-2 pl-5 sm:pl-0">{formatDate(l.date)}</td>
                   <td className="py-2">{l.lesson_type}</td>
-                  <td className="py-2 text-right">{l.duration_mins} min</td>
+                  <td className="py-2 text-right">
+                    {l.pricing_type === "flat" ? "—" : `${l.duration_mins} min`}
+                  </td>
                   <td className="py-2 text-right">
                     {l.pricing_type === "hourly"
                       ? `${money(perSkaterRate)}/hr`
                       : `${money(perSkaterRate)} flat`}
                   </td>
-                  <td className="py-2 text-right font-medium">{money(perSkaterAmount(l))}</td>
+                  <td className="py-2 text-right font-medium pr-5 sm:pr-0">{money(perSkaterAmount(l))}</td>
                 </tr>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
 
         <div className="space-y-1 text-sm text-right">
           <div>

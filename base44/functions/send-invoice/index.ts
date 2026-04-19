@@ -130,7 +130,7 @@ async function buildInvoicePDF(
       l.pricing_type === "hourly"
         ? `$${perSkaterRate.toFixed(2)}/hr`
         : `$${perSkaterRate.toFixed(2)} flat`;
-    const durationStr = `${l.duration_mins} min`;
+    const durationStr = l.pricing_type === "flat" ? "—" : `${l.duration_mins} min`;
     const typeStr = l.lesson_type || "Private";
     page.drawText(formatDate(l.date), { x: LEFT, y, size: 9, font: regular, color: black });
     page.drawText(typeStr, { x: LEFT + 95, y, size: 9, font: regular, color: black });

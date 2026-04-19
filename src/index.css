@@ -25,13 +25,39 @@
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border;
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
+
   body {
     @apply bg-background text-foreground antialiased;
+    /* Respect iPhone home-indicator/notch at the page edges. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Prevent iOS Safari from auto-zooming on focused form controls.
+     iOS triggers zoom when input font-size < 16px. */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Native date/time/month/number controls can look cramped on iOS — give them
+     breathing room and a consistent baseline. */
+  input[type="date"],
+  input[type="time"],
+  input[type="month"],
+  input[type="number"] {
+    min-height: 44px;
+  }
+
+  * {
+    @apply border-border;
   }
 }

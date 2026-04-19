@@ -40,7 +40,7 @@ export default function Dashboard() {
     .slice(0, 5);
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 md:p-8 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-500 mt-1">Welcome back! Here's your overview</p>
@@ -105,7 +105,8 @@ export default function Dashboard() {
                   <div>
                     <div className="font-medium text-slate-900">{names || "—"}</div>
                     <div className="text-slate-500 text-xs">
-                      {formatDate(l.date)} · {l.lesson_type} · {l.duration_mins} min
+                      {formatDate(l.date)} · {l.lesson_type} ·{" "}
+                      {l.pricing_type === "flat" ? "—" : `${l.duration_mins} min`}
                     </div>
                   </div>
                   <div className="font-semibold text-slate-900">{money(lessonTotal(l))}</div>

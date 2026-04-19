@@ -2,15 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Plus,
-  X,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  Calendar as CalIcon,
-  List as ListIcon,
-} from "lucide-react";
+import { Plus, X, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   money,
   formatDate,
@@ -34,6 +26,18 @@ const LESSON_TYPES = [
 // Which lesson types allow multiple skaters in the same lesson.
 const MULTI_SKATER_TYPES = new Set(["Semi Private", "Off-Ice Training"]);
 
+// Color swatches per lesson type: { tile, dot } Tailwind class lists.
+const TYPE_STYLES = {
+  Private: { tile: "bg-sky-50 hover:bg-sky-100 border-sky-200", dot: "bg-sky-500" },
+  "Semi Private": { tile: "bg-purple-50 hover:bg-purple-100 border-purple-200", dot: "bg-purple-500" },
+  Competition: { tile: "bg-amber-50 hover:bg-amber-100 border-amber-200", dot: "bg-amber-500" },
+  Choreography: { tile: "bg-pink-50 hover:bg-pink-100 border-pink-200", dot: "bg-pink-500" },
+  "Off-Ice Training": { tile: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200", dot: "bg-emerald-500" },
+  Expenses: { tile: "bg-slate-100 hover:bg-slate-200 border-slate-300", dot: "bg-slate-500" },
+};
+const DEFAULT_STYLE = { tile: "bg-slate-50 hover:bg-slate-100 border-slate-200", dot: "bg-slate-400" };
+const styleFor = (type) => TYPE_STYLES[type] || DEFAULT_STYLE;
+
 function isoKey(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -54,7 +58,6 @@ function lessonSkaterNames(lesson, skaterMap) {
 export default function Lessons() {
   const [lessons, setLessons] = useState([]);
   const [skaters, setSkaters] = useState([]);
-  const [mode, setMode] = useState("calendar");
   const [calView, setCalView] = useState("week");
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
@@ -84,37 +87,19 @@ export default function Lessons() {
 
   const nav = (delta) => {
     const d = new Date(cursor);
-    if (mode === "calendar" && calView === "week") d.setDate(d.getDate() + delta * 7);
+    if (calView === "week") d.setDate(d.getDate() + delta * 7);
     else d.setDate(d.getDate() + delta);
     setCursor(d);
   };
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 md:p-8 max-w-6xl">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Lessons</h1>
           <p className="text-slate-500 mt-1">Track your daily lessons</p>
         </div>
-        <div className="flex gap-2">
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              onClick={() => setMode("calendar")}
-              className={`inline-flex items-center gap-2 px-4 h-9 text-sm rounded-lg ${
-                mode === "calendar" ? "bg-slate-900 text-white" : "text-slate-700"
-              }`}
-            >
-              <CalIcon className="w-4 h-4" /> Calendar
-            </button>
-            <button
-              onClick={() => setMode("list")}
-              className={`inline-flex items-center gap-2 px-4 h-9 text-sm rounded-lg ${
-                mode === "list" ? "bg-slate-900 text-white" : "text-slate-700"
-              }`}
-            >
-              <ListIcon className="w-4 h-4" /> List
-            </button>
-          </div>
+        <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => setShowForm(true)}
             className="bg-slate-900 hover:bg-slate-800 rounded-xl h-11 px-5"
@@ -124,46 +109,42 @@ export default function Lessons() {
         </div>
       </div>
 
-      {mode === "calendar" && (
-        <div className="flex items-center gap-2 mb-4">
-          <button onClick={() => nav(-1)} className="p-2 rounded-lg hover:bg-slate-100">
-            <ChevronLeft className="w-4 h-4" />
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => nav(-1)} className="p-2 rounded-lg hover:bg-slate-100">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setCursor(new Date())}
+          className="px-4 h-9 rounded-lg border border-slate-200 bg-white text-sm"
+        >
+          Today
+        </button>
+        <button onClick={() => nav(1)} className="p-2 rounded-lg hover:bg-slate-100">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white ml-3 p-1">
+          <button
+            onClick={() => setCalView("week")}
+            className={`px-4 h-8 text-sm rounded-md ${calView === "week" ? "bg-slate-900 text-white" : "text-slate-700"}`}
+          >
+            Week
           </button>
           <button
-            onClick={() => setCursor(new Date())}
-            className="px-4 h-9 rounded-lg border border-slate-200 bg-white text-sm"
+            onClick={() => setCalView("day")}
+            className={`px-4 h-8 text-sm rounded-md ${calView === "day" ? "bg-slate-900 text-white" : "text-slate-700"}`}
           >
-            Today
+            Day
           </button>
-          <button onClick={() => nav(1)} className="p-2 rounded-lg hover:bg-slate-100">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white ml-3 p-1">
-            <button
-              onClick={() => setCalView("week")}
-              className={`px-4 h-8 text-sm rounded-md ${calView === "week" ? "bg-slate-900 text-white" : "text-slate-700"}`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setCalView("day")}
-              className={`px-4 h-8 text-sm rounded-md ${calView === "day" ? "bg-slate-900 text-white" : "text-slate-700"}`}
-            >
-              Day
-            </button>
-          </div>
         </div>
+      </div>
+
+      {calView === "week" ? (
+        <WeekView cursor={cursor} lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} />
+      ) : (
+        <DayView cursor={cursor} lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} />
       )}
 
-      {mode === "calendar" ? (
-        calView === "week" ? (
-          <WeekView cursor={cursor} lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} />
-        ) : (
-          <DayView cursor={cursor} lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} />
-        )
-      ) : (
-        <ListView lessons={lessons} skaterMap={skaterMap} onEdit={setEditing} onChange={refresh} />
-      )}
+      <ColorLegend />
 
       <div className="grid grid-cols-3 gap-4 mt-6">
         <StatTile label="Total Lessons" value={lessons.length} />
@@ -188,9 +169,11 @@ export default function Lessons() {
 
 function StatTile({ label, value }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="text-2xl font-bold text-slate-900 mt-1">{value}</div>
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-5 min-w-0">
+      <div className="text-xs md:text-sm text-slate-500 truncate">{label}</div>
+      <div className="text-lg md:text-2xl font-bold text-slate-900 mt-1 truncate tabular-nums">
+        {value}
+      </div>
     </div>
   );
 }
@@ -220,15 +203,19 @@ function DayCard({ date, lessons, skaterMap, isToday, onEdit, large }) {
           <div className="space-y-2">
             {lessons.map((l) => {
               const names = lessonSkaterNames(l, skaterMap);
+              const s = styleFor(l.lesson_type);
               return (
                 <button
                   key={l.id}
                   onClick={() => onEdit(l)}
-                  className="w-full text-left p-2 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-100 text-xs"
+                  className={`w-full text-left p-2 rounded-lg border text-xs ${s.tile}`}
                 >
-                  <div className="font-medium text-slate-900 truncate">{names}</div>
-                  <div className="text-slate-500">
-                    {l.lesson_type} · {l.duration_mins} min
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                    <div className="font-medium text-slate-900 truncate">{names}</div>
+                  </div>
+                  <div className="text-slate-600 mt-0.5">
+                    {l.lesson_type} · {l.pricing_type === "flat" ? "—" : `${l.duration_mins} min`}
                   </div>
                   <div className="font-semibold text-slate-900 mt-0.5">
                     {money(lessonTotal(l))}
@@ -252,21 +239,26 @@ function WeekView({ cursor, lessons, skaterMap, onEdit }) {
     return d;
   });
   return (
-    <div className="grid grid-cols-7 gap-3">
-      {days.map((d) => {
-        const key = isoKey(d);
-        const dayLessons = lessons.filter((l) => l.date === key);
-        return (
-          <DayCard
-            key={key}
-            date={d}
-            lessons={dayLessons}
-            skaterMap={skaterMap}
-            isToday={key === todayKey}
-            onEdit={onEdit}
-          />
-        );
-      })}
+    <div className="-mx-4 md:mx-0 px-4 md:px-0 overflow-x-auto snap-x">
+      <div
+        className="grid grid-flow-col auto-cols-[minmax(9rem,1fr)] gap-3 md:grid-flow-row md:auto-cols-auto md:grid-cols-7"
+      >
+        {days.map((d) => {
+          const key = isoKey(d);
+          const dayLessons = lessons.filter((l) => l.date === key);
+          return (
+            <div key={key} className="snap-start">
+              <DayCard
+                date={d}
+                lessons={dayLessons}
+                skaterMap={skaterMap}
+                isToday={key === todayKey}
+                onEdit={onEdit}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -287,56 +279,19 @@ function DayView({ cursor, lessons, skaterMap, onEdit }) {
   );
 }
 
-function ListView({ lessons, skaterMap, onEdit, onChange }) {
-  const sorted = [...lessons].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+function ColorLegend() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      {sorted.length === 0 ? (
-        <div className="py-16 text-center text-slate-400">No lessons</div>
-      ) : (
-        <div className="divide-y divide-slate-100">
-          {sorted.map((l) => (
-            <LessonRow
-              key={l.id}
-              lesson={l}
-              skaterMap={skaterMap}
-              onEdit={() => onEdit(l)}
-              onChange={onChange}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LessonRow({ lesson, skaterMap, onEdit, onChange }) {
-  const handleDelete = async (e) => {
-    e.stopPropagation();
-    if (!confirm("Delete this lesson?")) return;
-    const mapping = invoiceMappingOf(lesson);
-    const invoiceIds = [...new Set(Object.values(mapping).filter(Boolean))];
-    await base44.entities.Lesson.delete(lesson.id);
-    for (const id of invoiceIds) await recalcInvoice(id);
-    onChange();
-  };
-  const names = lessonSkaterNames(lesson, skaterMap);
-  const invoiced = Object.keys(invoiceMappingOf(lesson)).length > 0;
-  return (
-    <div className="px-5 py-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer" onClick={onEdit}>
-      <div>
-        <div className="font-medium text-slate-900">{names || "—"}</div>
-        <div className="text-xs text-slate-500">
-          {formatDate(lesson.date)} · {lesson.lesson_type} · {lesson.duration_mins} min
-          {invoiced && <span className="ml-2 text-sky-600">· Invoiced</span>}
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="font-semibold text-slate-900">{money(lessonTotal(lesson))}</div>
-        <button onClick={handleDelete} className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50">
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
+    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+      <span className="text-slate-500 font-medium">Lesson types:</span>
+      {LESSON_TYPES.map((type) => {
+        const s = styleFor(type);
+        return (
+          <span key={type} className="inline-flex items-center gap-1.5">
+            <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
+            {type}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -466,8 +421,8 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
   const anyInvoiced = lesson && Object.keys(invoiceMappingOf(lesson)).length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900">{lesson ? "Edit Lesson" : "Log New Lesson"}</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -506,12 +461,18 @@ function LessonModal({ lesson, skaters, onClose, onSaved }) {
           <Field label="Date *">
             <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
           </Field>
-          <Field label="Duration (min) *">
-            <Select
-              value={String(form.duration_mins)}
-              onChange={(v) => set("duration_mins", v)}
-              options={DURATION_OPTIONS.map((n) => ({ value: String(n), label: `${n} min` }))}
-            />
+          <Field label={`Duration (min)${form.pricing_type === "flat" ? "" : " *"}`}>
+            {form.pricing_type === "flat" ? (
+              <div className="w-full h-11 px-3 border border-slate-200 rounded-xl bg-slate-50 text-sm text-slate-400 flex items-center">
+                —
+              </div>
+            ) : (
+              <Select
+                value={String(form.duration_mins)}
+                onChange={(v) => set("duration_mins", v)}
+                options={DURATION_OPTIONS.map((n) => ({ value: String(n), label: `${n} min` }))}
+              />
+            )}
           </Field>
           <Field label="Pricing *">
             <div className="flex gap-4">

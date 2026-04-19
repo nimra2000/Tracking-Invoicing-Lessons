@@ -61,7 +61,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 md:p-8 max-w-3xl">
       <div className="mb-6 flex items-center gap-3">
         <SettingsIcon className="w-6 h-6 text-slate-600" />
         <div>
