@@ -1,0 +1,9 @@
+{
+  "name": "Student",
+  "type": "object",
+  "description": "Legacy entity from earlier test build; no longer used.",
+  "properties": {
+    "name": { "type": "string" },
+    "email": { "type": "string" }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "Invoice",
+  "type": "object",
+  "properties": {
+    "skater_id": {
+      "type": "string",
+      "description": "Skater this invoice bills"
+    },
+    "month": {
+      "type": "string",
+      "description": "Invoice period in YYYY-MM (or range like 2026-03_2026-04)"
+    },
+    "invoice_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of invoice issuance"
+    },
+    "period_label": {
+      "type": "string",
+      "description": "Human-readable period (e.g., 'March 2026')"
+    },
+    "tax_rate": {
+      "type": "number",
+      "default": 0,
+      "description": "Tax rate as percent (e.g., 13 for 13%)"
+    },
+    "subtotal": {
+      "type": "number",
+      "description": "Sum of line items before tax"
+    },
+    "tax_amount": {
+      "type": "number",
+      "description": "Computed tax amount"
+    },
+    "total": {
+      "type": "number",
+      "description": "Total amount due (subtotal + tax)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "paid"],
+      "default": "pending",
+      "description": "Payment status"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the invoice was emailed (null until sent)"
+    }
+  },
+  "required": ["skater_id", "month", "invoice_date", "total"],
+  "rls": {
+    "create": true,
+    "read": { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

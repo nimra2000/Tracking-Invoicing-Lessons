@@ -1,0 +1,50 @@
+{
+  "name": "Lesson",
+  "type": "object",
+  "properties": {
+    "skater_id": {
+      "type": "string",
+      "description": "ID of the skater this lesson is for"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the lesson"
+    },
+    "lesson_type": {
+      "type": "string",
+      "enum": ["Private", "Semi Private", "Competition", "Choreography", "Off-Ice Training", "Expenses"],
+      "default": "Private",
+      "description": "Type of lesson"
+    },
+    "duration_mins": {
+      "type": "integer",
+      "description": "Duration in minutes (e.g., 20, 25, 30, 40, 50, 60)"
+    },
+    "pricing_type": {
+      "type": "string",
+      "enum": ["hourly", "flat"],
+      "default": "hourly",
+      "description": "Hourly billing (rate * duration/60) or flat amount"
+    },
+    "rate": {
+      "type": "number",
+      "description": "Dollar rate. Interpreted as $/hr if hourly, total $ if flat."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Freeform notes about the lesson"
+    },
+    "invoice_id": {
+      "type": "string",
+      "description": "ID of the Invoice this lesson is on (null until invoiced)"
+    }
+  },
+  "required": ["skater_id", "date", "lesson_type", "duration_mins", "pricing_type", "rate"],
+  "rls": {
+    "create": true,
+    "read": { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

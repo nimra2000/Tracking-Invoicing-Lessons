@@ -1,0 +1,34 @@
+{
+  "name": "Skater",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Skater's name"
+    },
+    "billing_name": {
+      "type": "string",
+      "description": "Name on the invoice (parent or business). Defaults to skater name."
+    },
+    "billing_emails": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Email addresses invoices are sent to"
+    },
+    "default_hourly_rate": {
+      "type": "number",
+      "description": "Default hourly rate for this skater"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Freeform notes"
+    }
+  },
+  "required": ["name", "default_hourly_rate"],
+  "rls": {
+    "create": true,
+    "read": { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

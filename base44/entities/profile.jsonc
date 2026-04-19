@@ -1,0 +1,52 @@
+{
+  "name": "Profile",
+  "type": "object",
+  "properties": {
+    "default_hourly_rate": {
+      "type": "number",
+      "default": 50,
+      "description": "Default hourly rate used when creating new skaters"
+    },
+    "coach_name": {
+      "type": "string",
+      "description": "Coach name (appears on invoices)"
+    },
+    "coach_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Coach email (appears on invoices)"
+    },
+    "coach_phone": {
+      "type": "string",
+      "description": "Coach phone (appears on invoices)"
+    },
+    "coach_address": {
+      "type": "string",
+      "description": "Coach mailing address (appears on invoices)"
+    },
+    "coach_website": {
+      "type": "string",
+      "description": "Coach website (appears on invoices)"
+    },
+    "tax_number": {
+      "type": "string",
+      "description": "Tax/business number such as GST/HST"
+    },
+    "payment_instructions_etransfer": {
+      "type": "string",
+      "description": "E-transfer email for invoice payment instructions"
+    },
+    "accepts_cheque_cash": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether cheque and cash are accepted"
+    }
+  },
+  "required": ["default_hourly_rate"],
+  "rls": {
+    "create": true,
+    "read": { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}
